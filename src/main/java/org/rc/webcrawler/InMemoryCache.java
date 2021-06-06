@@ -8,6 +8,7 @@ class InMemoryCache implements Cache {
 
     public void put(String url){
         cache.putIfAbsent(url, 1);
+        cache.computeIfPresent(url,(k,v)->v+1);
     }
 
     public boolean contain(String url){

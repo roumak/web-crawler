@@ -1,8 +1,5 @@
 package org.rc.webcrawler;
 
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-
 public class CommandLineExecutor {
 
     /**
@@ -13,21 +10,16 @@ public class CommandLineExecutor {
         String url = args[0];
         int pool = Integer.parseInt(args[1]);
 
-        BlockingQueue<String> queue =  new LinkedBlockingQueue<>();
-        Cache cache = new InMemoryCache();
-        OutputStrategy outputStrategy = new ConsoleOutputStrategy();
 
         WebCrawler webCrawler = new WebCrawler("crawler1",
-                queue,
-                cache,
-                outputStrategy,
+                new InMemoryConcurrentQueue(),
+                new InMemoryCache(),
+                new ConsoleOutputStrategy(),
                 new Fetcher(),
                 pool);
 
 
-        Thread t1 = new Thread(()->webCrawler.startCrawling(url));
-        t1.start();
-        t1.join();
+        webCrawler.startCrawling(url);
     }
 
 }

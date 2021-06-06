@@ -3,17 +3,15 @@ package org.rc.webcrawler;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
 
 public class WebCrawler {
 
     private String id;
-    private volatile BlockingQueue<String> queue;
+    private volatile Queue<String> queue;
     private volatile Cache cache;
     private OutputStrategy outputStrategy;
     private Fetcher fetcher;
@@ -23,14 +21,14 @@ public class WebCrawler {
     private int threadPool;
 
     public WebCrawler(String id,
-                      BlockingQueue<String> queue,
+                      Queue<String> queue,
                       Cache cache,
                       OutputStrategy outputStrategy,
                       Fetcher fetcher,
                       int threadPool) {
 
         this.id = id;
-        this.queue = queue == null ? new LinkedBlockingQueue<>() : queue;
+        this.queue = queue;
         this.outputStrategy = outputStrategy;
         this.fetcher = fetcher;
         this.cache = cache;
@@ -43,16 +41,15 @@ public class WebCrawler {
             throw new RuntimeException("invalid url, correct example: https://monzo.com");
         }
         normalizer = new URLNormalizer(seedUrl);
-        queue.add(normalizer.normalize(seedUrl));
-
+        queue.offer(normalizer.normalize(seedUrl));
         start();
+        executor.shutdown();
     }
 
     private void start() {
 
         long start = System.currentTimeMillis();
         while (!queue.isEmpty()) {
-            try {
                 List<Future<Set<String>>> futures = new ArrayList<>();
                 for (int i = 0; i < threadPool; i++) {
                     if (queue.isEmpty()) {
@@ -64,10 +61,6 @@ public class WebCrawler {
                 }
 
                 futures.stream().parallel().forEach(this::doJob);
-
-            } catch (InterruptedException e) {
-               e.printStackTrace();
-            }
         }
         System.out.println(id + "-main thread exit, time taken: "+ (System.currentTimeMillis() - start)/1000 +" sec");
     }
@@ -100,7 +93,7 @@ public class WebCrawler {
                 String normalizedUrl = normalizer.normalize(each);
                 if (!cache.contain(normalizedUrl)) {
                     cache.put(normalizedUrl);
-                    queue.put(normalizedUrl);
+                    queue.offer(normalizedUrl);
                 }
             }
         } catch (InterruptedException | ExecutionException e) {
