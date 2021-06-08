@@ -4,10 +4,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 class ConsoleOutputStrategy implements OutputStrategy {
 
-    AtomicInteger num= new AtomicInteger();
+    private final AtomicInteger lineItemNumber = new AtomicInteger();
 
     @Override
     public void output(String line) {
-        System.out.println(num.incrementAndGet() +" - " + line);
+        System.out.printf("[ %d ] - %s \n", lineItemNumber.incrementAndGet(), line);
     }
 }

@@ -1,8 +1,8 @@
 package org.rc.webcrawler;
 
-interface Cache {
+public interface Cache {
 
-    public void put(String url);
+    void put(String url);
 
-    public boolean contain(String url);
+    boolean contain(String url);
 }

@@ -6,8 +6,8 @@ class URLNormalizer {
 
     private String urlDomain;
 
-    URLNormalizer(String seedUrl){
-        String[] split = seedUrl.split("/");
+    URLNormalizer(String startUrl){
+        String[] split = startUrl.split("/");
         // http(s) + // + domain
         this.urlDomain=split[0]+"//"+split[2];
     }

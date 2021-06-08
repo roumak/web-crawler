@@ -10,85 +10,83 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 public class WebCrawler {
 
     private final BlockingQueue<String> queue;
-    private final BlockingQueue<String> tempQueue = new LinkedBlockingQueue<>();
-
     private final Cache cache;
     private final OutputStrategy outputStrategy;
-    private final WebPageHandler webPageHandler;
-    private URLNormalizer normalizer;
-
     private final ExecutorService executor;
+    private final long timeoutInMills;
     private final int poolSize;
+    private URLNormalizer normalizer;
 
     private final ReentrantLock lock = new ReentrantLock();
 
     public WebCrawler() {
-        this(128);
+        this(128, 10_000);
     }
 
     public WebCrawler(int poolSize) {
-        this.queue = new LinkedBlockingQueue<>();
-        this.outputStrategy = new ConsoleOutputStrategy();
-        this.webPageHandler = new WebPageHandler(10, TimeUnit.SECONDS);
-        this.cache = new InMemoryConcurrentCache();
-        this.poolSize = poolSize;
-        this.executor = Executors.newFixedThreadPool(poolSize);
+        this(poolSize, 10_000);
     }
 
-    public WebCrawler(BlockingQueue<String> queue,
-                      Cache cache,
-                      OutputStrategy outputStrategy,
-                      WebPageHandler webPageHandler,
-                      int threadPool) {
+    public WebCrawler(int poolSize, long timeoutInMills) {
+        this.poolSize = poolSize;
+        this.timeoutInMills = timeoutInMills;
+        this.queue = new LinkedBlockingQueue<>();
+        this.outputStrategy = new ConsoleOutputStrategy();
+        this.cache = new InMemoryConcurrentCache();
+        this.executor = Executors.newFixedThreadPool(this.poolSize);
+    }
 
+    public WebCrawler(int threadPool,
+                      long timeoutInMills,
+                      BlockingQueue<String> queue,
+                      Cache cache,
+                      OutputStrategy outputStrategy) {
+        this.timeoutInMills = timeoutInMills;
         this.queue = queue;
         this.outputStrategy = outputStrategy;
-        this.webPageHandler = webPageHandler;
         this.cache = cache;
         this.poolSize = threadPool;
         this.executor = Executors.newFixedThreadPool(threadPool);
     }
 
-    public void startCrawling(String seedUrl, long timeout, TimeUnit timeUnit) {
-        if (!seedUrl.startsWith("http")) {
-            throw new IllegalArgumentException("invalid url, correct example: https://monzo.com");
-        }
-        normalizer = new URLNormalizer(seedUrl);
-        webPageHandler.setNormalizer(normalizer);
-        queue.offer(normalizer.normalize(seedUrl));
-
-        System.out.printf("Initiating web crawling, seedUrl=%s, poolSize=%d%n", seedUrl, poolSize);
-        executor.submit(() -> repopulate(timeout, timeUnit));
-
-        // start crawling
-        startCrawling(timeUnit.toMillis(timeout));
+    private void preSets(String startUrl) {
+        normalizer = new URLNormalizer(startUrl);
+        queue.offer(normalizer.normalize(startUrl));
     }
 
-    private void startCrawling(long timeout) {
+    public void startCrawling(String startUrl) {
+        if (!startUrl.startsWith("http")) {
+            throw new IllegalArgumentException("invalid url format, correct example: https://monzo.com");
+        }
+        preSets(startUrl);
+        System.out.printf("Initiating web crawling, startUrl=%s, poolSize=%d%n", startUrl, poolSize);
+        // start crawling
+        startCrawling();
+    }
+
+    private void startCrawling() {
         long start = System.currentTimeMillis();
         start();
         System.out.printf("WebCrawler -- main thread exit, process completed in [%d] sec, but was waiting for additional [%d] sec to see if new URL appears %n",
-                (System.currentTimeMillis() - timeout - start) / 1000,
-                timeout / 1000);
+                (System.currentTimeMillis() - timeoutInMills - start) / 1000,
+                timeoutInMills / 1000);
+        executor.shutdown();
     }
 
     private void start() {
         try {
-            while (!executor.isTerminated()) {
-                int count = Math.min(queue.size(), poolSize);
-                for (int i = 0; i < count; i++) {
-                    String url = queue.take();
-
-                    var completableFutureLinks =
-                            CompletableFuture.supplyAsync(() -> fetchAndFilter(url, subUrl -> subUrl.startsWith("/")), executor);
-                    completableFutureLinks.thenAcceptAsync(links -> output(url, links));
-                    completableFutureLinks.thenAccept( this::saveToTempQueue);
-                    //pageCompletableFuture.thenAccept(optionalResponse -> optionalResponse.ifPresent(doAction));
-                }
+            String url;
+            while ((url = queue.poll(10, TimeUnit.SECONDS)) != null) {
+                final String finalUrl = url;
+                var completableFutureLinks =
+                        CompletableFuture.supplyAsync(() -> fetchAndFilter(finalUrl, subUrl -> subUrl.startsWith("/")), executor);
+                completableFutureLinks.thenAcceptAsync(links -> output(finalUrl, links));
+                completableFutureLinks.thenAccept(this::saveToTempQueue);
             }
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -96,47 +94,29 @@ public class WebCrawler {
     }
 
     private Set<String> fetchAndFilter(String url, Predicate<String> urlFilter) {
-        return webPageHandler.fetch.apply(url)
-                .flatMap(page -> webPageHandler.filter.apply(page, urlFilter))
+        return WebPageHandler.fetch.apply(url, timeoutInMills)
+                .flatMap(page -> WebPageHandler.filter.apply(page, urlFilter))
+                .map(urlStream -> urlStream.map(normalizer::normalize).collect(Collectors.toSet()))
                 .orElse(new HashSet<>());
     }
 
     private void output(String currUrl, Set<String> links) {
-       outputStrategy.output(
-                         currUrl
-                        + " -> "
-                        + links.toString());
+        outputStrategy.output(currUrl + " -> " + links.toString());
     }
 
 
     private void saveToTempQueue(Set<String> links) {
-        links.forEach(each -> {
+        // possible multiple batch of links may overlap each other here
+        // that's why a lock is introduced
+        lock.lock();
+        links.parallelStream().forEach(each -> {
             String normalizedUrl = normalizer.normalize(each);
-            // possible multiple batch of links may overlap each other here
-            // that's why a lock is introduced
-            lock.lock();
             if (!cache.contain(normalizedUrl)) {
                 cache.put(normalizedUrl);
-                tempQueue.offer(normalizedUrl);
+                queue.offer(normalizedUrl);
             }
-            lock.unlock();
         });
+        lock.unlock();
     }
 
-    private void repopulate(long timeout, TimeUnit timeUnit) {
-        try {
-            boolean var = true;
-            while (var) {
-                String url = tempQueue.poll(timeout, timeUnit);
-                if (url == null) {
-                    var = false;
-                    executor.shutdown();
-                } else {
-                    queue.offer(url);
-                }
-            }
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
 }

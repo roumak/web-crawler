@@ -16,32 +16,21 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 class WebPageHandler {
 
-    private URLNormalizer normalizer;
-    private final long timeout;
-    private final TimeUnit timeUnit;
+    public static final BiFunction<String, Long, Optional<Connection.Response>> fetch = WebPageHandler::fetch;
 
-    public Function<String, Optional<Connection.Response>> fetch = this::fetch;
+    public static final BiFunction<Connection.Response, Predicate<String>, Optional<Stream<String>>> filter = WebPageHandler::filter;
 
-    public BiFunction<Connection.Response, Predicate<String>, Optional<Set<String>>> filter = this::filter;
 
-    public WebPageHandler(long timeout, TimeUnit timeUnit) {
-        this.timeout = timeout;
-        this.timeUnit = timeUnit;
-    }
-
-    public void setNormalizer(URLNormalizer normalizer) {
-        this.normalizer = normalizer;
-    }
-
-    private Optional<Connection.Response> fetch(String url) {
+    private static Optional<Connection.Response> fetch(String url, long timeoutInMills) {
         try {
             return Optional.of(
                     Jsoup.connect(url)
                             .userAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/535.21 (KHTML, like Gecko) Chrome/19.0.1042.0 Safari/535.21")
-                            .timeout((int) timeUnit.toMillis(timeout))
+                            .timeout((int) timeoutInMills)
                             .ignoreContentType(true)
                             .execute()
             );
@@ -53,16 +42,13 @@ class WebPageHandler {
 
     }
 
-    private Optional<Set<String>> filter(Connection.Response response, Predicate<String> urlFilter) {
+    private static Optional<Stream<String>> filter(Connection.Response response, Predicate<String> urlFilter) {
         try {
             return Optional.of(
                     response.parse().select("a[href]")
-                            .stream()
+                            .parallelStream()
                             .map(link -> link.attr("href"))
-                            .filter(urlFilter)
-                            .map(filteredUrl -> normalizer == null ? filteredUrl : normalizer.normalize(filteredUrl))
-                            .collect(Collectors.toSet())
-            );
+                            .filter(urlFilter));
 
         } catch (IOException e) {
             System.out.println(response.statusCode() + e.getMessage());

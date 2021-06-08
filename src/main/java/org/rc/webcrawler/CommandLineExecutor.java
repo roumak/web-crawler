@@ -1,13 +1,7 @@
 package org.rc.webcrawler;
 
-import java.util.concurrent.TimeUnit;
-
 public class CommandLineExecutor {
 
-    /**
-     * You can run the Unit Test to see the results
-     *
-     */
     public static void main(String[] args) {
         WebCrawler webCrawler;
         switch (args.length){
@@ -17,12 +11,17 @@ public class CommandLineExecutor {
             case 2:
                 webCrawler = new WebCrawler(Integer.parseInt(args[1]));
                 break;
+            case 3:
+                webCrawler = new WebCrawler(Integer.parseInt(args[1]), Long.parseLong(args[2]));
+                break;
             default:
                 throw new IllegalArgumentException("\nrequired command line arguments:" +
-                        "\n arg[0] - seedUrl (mandatory) example: https://monzo.com" +
-                        "\n arg[1] - poolSize (optional) defaults to 200");
+                        "\n arg[0] - startUrl (mandatory) example: https://monzo.com" +
+                        "\n arg[1] - poolSize (optional) defaults to 128"+
+                        "\n arg[2] - timeout in millis (optional) defaults to 10_000"
+                );
         }
-        webCrawler.startCrawling(args[0], 10, TimeUnit.SECONDS);
+        webCrawler.startCrawling(args[0]);
     }
 
 }
