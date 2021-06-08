@@ -7,7 +7,7 @@ class ConsoleOutputStrategy implements OutputStrategy {
     AtomicInteger num= new AtomicInteger();
 
     @Override
-    public void print(String line) {
+    public void output(String line) {
         System.out.println(num.incrementAndGet() +" - " + line);
     }
 }

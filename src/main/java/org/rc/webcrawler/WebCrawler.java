@@ -1,18 +1,14 @@
 package org.rc.webcrawler;
 
-import org.jsoup.Connection;
-
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 public class WebCrawler {
@@ -31,7 +27,7 @@ public class WebCrawler {
     private final ReentrantLock lock = new ReentrantLock();
 
     public WebCrawler() {
-        this(256);
+        this(128);
     }
 
     public WebCrawler(int poolSize) {
@@ -89,10 +85,9 @@ public class WebCrawler {
 
                     var completableFutureLinks =
                             CompletableFuture.supplyAsync(() -> fetchAndFilter(url, subUrl -> subUrl.startsWith("/")), executor);
-                    completableFutureLinks.thenAcceptAsync(links -> print(url, links));
-                    completableFutureLinks.thenAcceptAsync( this::saveToTempQueue);
-
-                    //                    completableFutureLinks.thenAccept(optionalResponse -> optionalResponse.ifPresent(doAction));
+                    completableFutureLinks.thenAcceptAsync(links -> output(url, links));
+                    completableFutureLinks.thenAccept( this::saveToTempQueue);
+                    //pageCompletableFuture.thenAccept(optionalResponse -> optionalResponse.ifPresent(doAction));
                 }
             }
         } catch (InterruptedException e) {
@@ -106,14 +101,11 @@ public class WebCrawler {
                 .orElse(new HashSet<>());
     }
 
-    private void print(String currUrl, Set<String> links) {
-       outputStrategy.print(
-                Thread.currentThread().getName()
-                        + " - "
-                        + currUrl
+    private void output(String currUrl, Set<String> links) {
+       outputStrategy.output(
+                         currUrl
                         + " -> "
-                        + links.toString()
-                );
+                        + links.toString());
     }
 
 
@@ -121,7 +113,7 @@ public class WebCrawler {
         links.forEach(each -> {
             String normalizedUrl = normalizer.normalize(each);
             // possible multiple batch of links may overlap each other here
-            //that's why a lock is introduced
+            // that's why a lock is introduced
             lock.lock();
             if (!cache.contain(normalizedUrl)) {
                 cache.put(normalizedUrl);
