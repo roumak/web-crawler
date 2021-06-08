@@ -1,57 +1,60 @@
 package org.rc.webcrawler;
 
-import java.util.ArrayList;
+import org.jsoup.Connection;
+
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 public class WebCrawler {
 
-    private volatile BlockingQueue<String> queue;
-    private volatile BlockingQueue<String> tempQueue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<String> queue;
+    private final BlockingQueue<String> tempQueue = new LinkedBlockingQueue<>();
 
-    private volatile Cache cache;
+    private final Cache cache;
     private final OutputStrategy outputStrategy;
-    private final Fetcher fetcher;
+    private final WebPageHandler webPageHandler;
     private URLNormalizer normalizer;
 
-    private final ForkJoinPool executor;
-    private final ForkJoinPool cpuExecutor = new ForkJoinPool(4);
+    private final ExecutorService executor;
     private final int poolSize;
 
+    private final ReentrantLock lock = new ReentrantLock();
+
     public WebCrawler() {
-        this(200);
+        this(256);
     }
 
     public WebCrawler(int poolSize) {
         this.queue = new LinkedBlockingQueue<>();
         this.outputStrategy = new ConsoleOutputStrategy();
-        this.fetcher = new Fetcher(10, TimeUnit.SECONDS);
-        this.cache = new InMemoryCache();
+        this.webPageHandler = new WebPageHandler(10, TimeUnit.SECONDS);
+        this.cache = new InMemoryConcurrentCache();
         this.poolSize = poolSize;
-        this.executor = new ForkJoinPool(poolSize);
+        this.executor = Executors.newFixedThreadPool(poolSize);
     }
 
-    public WebCrawler(String id,
-                      BlockingQueue<String> queue,
+    public WebCrawler(BlockingQueue<String> queue,
                       Cache cache,
                       OutputStrategy outputStrategy,
-                      Fetcher fetcher,
+                      WebPageHandler webPageHandler,
                       int threadPool) {
 
         this.queue = queue;
         this.outputStrategy = outputStrategy;
-        this.fetcher = fetcher;
+        this.webPageHandler = webPageHandler;
         this.cache = cache;
         this.poolSize = threadPool;
-        this.executor = new ForkJoinPool(threadPool);
+        this.executor = Executors.newFixedThreadPool(threadPool);
     }
 
     public void startCrawling(String seedUrl, long timeout, TimeUnit timeUnit) {
@@ -59,6 +62,7 @@ public class WebCrawler {
             throw new IllegalArgumentException("invalid url, correct example: https://monzo.com");
         }
         normalizer = new URLNormalizer(seedUrl);
+        webPageHandler.setNormalizer(normalizer);
         queue.offer(normalizer.normalize(seedUrl));
 
         System.out.printf("Initiating web crawling, seedUrl=%s, poolSize=%d%n", seedUrl, poolSize);
@@ -82,9 +86,13 @@ public class WebCrawler {
                 int count = Math.min(queue.size(), poolSize);
                 for (int i = 0; i < count; i++) {
                     String url = queue.take();
-                    var completableFutureLinks = CompletableFuture.supplyAsync(() -> crawl(url), executor);
-                    completableFutureLinks.thenAcceptAsync(this::saveToTempQueue, cpuExecutor);
-                    completableFutureLinks.thenAcceptAsync(link -> print(url, link), cpuExecutor);
+
+                    var completableFutureLinks =
+                            CompletableFuture.supplyAsync(() -> fetchAndFilter(url, subUrl -> subUrl.startsWith("/")), executor);
+                    completableFutureLinks.thenAcceptAsync(links -> print(url, links));
+                    completableFutureLinks.thenAcceptAsync( this::saveToTempQueue);
+
+                    //                    completableFutureLinks.thenAccept(optionalResponse -> optionalResponse.ifPresent(doAction));
                 }
             }
         } catch (InterruptedException e) {
@@ -92,33 +100,35 @@ public class WebCrawler {
         }
     }
 
-    private Set<String> crawl(String url) {
-        return fetcher.fetch(url);
+    private Set<String> fetchAndFilter(String url, Predicate<String> urlFilter) {
+        return webPageHandler.fetch.apply(url)
+                .flatMap(page -> webPageHandler.filter.apply(page, urlFilter))
+                .orElse(new HashSet<>());
     }
 
     private void print(String currUrl, Set<String> links) {
-        cpuExecutor.submit(() -> outputStrategy.print(
+       outputStrategy.print(
                 Thread.currentThread().getName()
                         + " - "
                         + currUrl
                         + " -> "
                         + links.toString()
-                )
-        );
+                );
     }
 
-    // learnt about it from here: https://blog.krecan.net/2014/03/18/how-to-specify-thread-pool-for-java-8-parallel-streams/
-    // ugly though
+
     private void saveToTempQueue(Set<String> links) {
-        cpuExecutor.submit(() ->
-                links.stream().parallel().forEach(each -> {
-                    String normalizedUrl = normalizer.normalize(each);
-                    if (!cache.contain(normalizedUrl)) {
-                        cache.put(normalizedUrl);
-                        tempQueue.offer(normalizedUrl);
-                    }
-                })
-        );
+        links.forEach(each -> {
+            String normalizedUrl = normalizer.normalize(each);
+            // possible multiple batch of links may overlap each other here
+            //that's why a lock is introduced
+            lock.lock();
+            if (!cache.contain(normalizedUrl)) {
+                cache.put(normalizedUrl);
+                tempQueue.offer(normalizedUrl);
+            }
+            lock.unlock();
+        });
     }
 
     private void repopulate(long timeout, TimeUnit timeUnit) {
