@@ -1,8 +1,0 @@
-org\rc\webcrawler\Fetcher.class
-org\rc\webcrawler\OutputStrategy.class
-org\rc\webcrawler\WebCrawler.class
-org\rc\webcrawler\CommandLineExecutor.class
-org\rc\webcrawler\Cache.class
-org\rc\webcrawler\ConsoleOutputStrategy.class
-org\rc\webcrawler\URLNormalizer.class
-org\rc\webcrawler\InMemoryCache.class
