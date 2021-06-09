@@ -70,38 +70,35 @@ public class WebCrawler {
         try {
             String url;
             while ((url = queue.poll(10, TimeUnit.SECONDS)) != null) {
-                final String finalUrl = url;
-                var completableFutureLinks =
-                        CompletableFuture.supplyAsync(() -> fetchAndFilter(finalUrl, subUrl -> subUrl.startsWith("/")), executor);
-                completableFutureLinks.thenAcceptAsync(links -> output(finalUrl, links));
-                completableFutureLinks.thenAccept(this::saveToTempQueue);
+                final String currentPageUrl = url;
+                var normalizedUrlCF =
+                        CompletableFuture.supplyAsync(() ->
+                                fetchExtractAndNormalize(currentPageUrl, subUrl -> subUrl.startsWith("/")), executor);
+
+                normalizedUrlCF.thenAcceptAsync(subUrl -> writer.write(currentPageUrl + " -> " + subUrl.toString()));
+                normalizedUrlCF.thenAccept(this::saveToTempQueue);
             }
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
 
-    private Set<String> fetchAndFilter(String url, Predicate<String> urlFilter) {
-        return WebPageHandler.FETCHER.apply(url, timeoutInMillis)
-                .flatMap(page -> WebPageHandler.LINK_EXTRACTOR.apply(page, urlFilter))
+    private Set<String> fetchExtractAndNormalize(String url, Predicate<String> urlFilter) {
+        return WebPageHandler.PAGE_FETCHER.apply(url, timeoutInMillis)
+                .flatMap(page -> WebPageHandler.URL_EXTRACTOR.apply(page, urlFilter))
                 .map(urlStream -> urlStream.map(normalizer::normalize).collect(Collectors.toSet()))
                 .orElse(new HashSet<>());
     }
 
-    private void output(String currUrl, Set<String> links) {
-        writer.write(currUrl + " -> " + links.toString());
-    }
 
-
-    private void saveToTempQueue(Set<String> links) {
-        // possible multiple batch of links may overlap each other here
+    private void saveToTempQueue(Set<String> normalizedUrls) {
+        // possible multiple batch of urls may overlap each other here
         // that's why a lock is introduced
         lock.lock();
-        links.parallelStream().forEach(each -> {
-            String normalizedUrl = normalizer.normalize(each);
-            if (!cache.contain(normalizedUrl)) {
-                cache.put(normalizedUrl);
-                queue.offer(normalizedUrl);
+        normalizedUrls.parallelStream().forEach(each -> {
+            if (!cache.contain(each)) {
+                cache.put(each);
+                queue.offer(each);
             }
         });
         lock.unlock();

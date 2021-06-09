@@ -14,8 +14,8 @@ class WebPageHandler {
 
     private static final Logger logger = Logger.getLogger(WebPageHandler.class.getName());
 
-    public static final BiFunction<String, Long, Optional<Connection.Response>> FETCHER = WebPageHandler::fetch;
-    public static final BiFunction<Connection.Response, Predicate<String>, Optional<Stream<String>>> LINK_EXTRACTOR = WebPageHandler::extract;
+    public static final BiFunction<String, Long, Optional<Connection.Response>> PAGE_FETCHER = WebPageHandler::fetch;
+    public static final BiFunction<Connection.Response, Predicate<String>, Optional<Stream<String>>> URL_EXTRACTOR = WebPageHandler::extract;
 
 
     private static Optional<Connection.Response> fetch(String url, long timeoutInMills) {
@@ -35,16 +35,16 @@ class WebPageHandler {
 
     }
 
-    private static Optional<Stream<String>> extract(Connection.Response response, Predicate<String> urlFilter) {
+    private static Optional<Stream<String>> extract(Connection.Response response, Predicate<String> subUrlFilter) {
         try {
             return Optional.of(
                     response.parse().select("a[href]")
                             .parallelStream()
-                            .map(link -> link.attr("href"))
-                            .filter(urlFilter));
+                            .map(url -> url.attr("href"))
+                            .filter(subUrlFilter));
 
         } catch (IOException e) {
-            logger.warning(String.format("error while extracting links, %s", e.getMessage()));
+            logger.warning(String.format("error while extracting urls, %s", e.getMessage()));
             return Optional.empty();
         }
     }
