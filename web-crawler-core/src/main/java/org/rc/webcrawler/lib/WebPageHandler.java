@@ -1,28 +1,21 @@
-package org.rc.webcrawler;
+package org.rc.webcrawler.lib;
 
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 class WebPageHandler {
 
-    public static final BiFunction<String, Long, Optional<Connection.Response>> fetch = WebPageHandler::fetch;
+    private static final Logger logger = Logger.getLogger(WebPageHandler.class.getName());
 
-    public static final BiFunction<Connection.Response, Predicate<String>, Optional<Stream<String>>> filter = WebPageHandler::filter;
+    public static final BiFunction<String, Long, Optional<Connection.Response>> FETCHER = WebPageHandler::fetch;
+    public static final BiFunction<Connection.Response, Predicate<String>, Optional<Stream<String>>> LINK_EXTRACTOR = WebPageHandler::extract;
 
 
     private static Optional<Connection.Response> fetch(String url, long timeoutInMills) {
@@ -36,13 +29,13 @@ class WebPageHandler {
             );
 
         } catch (IOException e) {
-            System.out.println(e.getMessage());
+            logger.warning(String.format("error fetching url=%s, %s", url, e.getMessage()));
             return Optional.empty();
         }
 
     }
 
-    private static Optional<Stream<String>> filter(Connection.Response response, Predicate<String> urlFilter) {
+    private static Optional<Stream<String>> extract(Connection.Response response, Predicate<String> urlFilter) {
         try {
             return Optional.of(
                     response.parse().select("a[href]")
@@ -51,7 +44,7 @@ class WebPageHandler {
                             .filter(urlFilter));
 
         } catch (IOException e) {
-            System.out.println(response.statusCode() + e.getMessage());
+            logger.warning(String.format("error while extracting links, %s", e.getMessage()));
             return Optional.empty();
         }
     }

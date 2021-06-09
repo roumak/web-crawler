@@ -1,5 +1,8 @@
-package org.rc.webcrawler;
+package org.rc.webcrawler.lib;
 
+/**
+ * Adapter definition for caching
+ */
 public interface Cache {
 
     void put(String url);

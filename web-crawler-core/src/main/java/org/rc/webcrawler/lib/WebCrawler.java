@@ -1,4 +1,4 @@
-package org.rc.webcrawler;
+package org.rc.webcrawler.lib;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -6,65 +6,53 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class WebCrawler {
 
     private final BlockingQueue<String> queue;
     private final Cache cache;
-    private final OutputStrategy outputStrategy;
-    private final ExecutorService executor;
-    private final long timeoutInMills;
-    private final int poolSize;
+    private final Writer writer;
+
+    private ExecutorService executor;
+    private long timeoutInMillis;
+    private int poolSize;
     private URLNormalizer normalizer;
 
     private final ReentrantLock lock = new ReentrantLock();
+    private final Logger logger = Logger.getLogger(WebCrawler.class.getName());
 
-    public WebCrawler() {
-        this(128, 10_000);
-    }
-
-    public WebCrawler(int poolSize) {
-        this(poolSize, 10_000);
-    }
-
-    public WebCrawler(int poolSize, long timeoutInMills) {
-        this.poolSize = poolSize;
-        this.timeoutInMills = timeoutInMills;
-        this.queue = new LinkedBlockingQueue<>();
-        this.outputStrategy = new ConsoleOutputStrategy();
-        this.cache = new InMemoryConcurrentCache();
-        this.executor = Executors.newFixedThreadPool(this.poolSize);
-    }
-
-    public WebCrawler(int threadPool,
-                      long timeoutInMills,
-                      BlockingQueue<String> queue,
+    public WebCrawler(BlockingQueue<String> queue,
                       Cache cache,
-                      OutputStrategy outputStrategy) {
-        this.timeoutInMills = timeoutInMills;
+                      Writer writer) {
         this.queue = queue;
-        this.outputStrategy = outputStrategy;
+        this.writer = writer;
         this.cache = cache;
-        this.poolSize = threadPool;
-        this.executor = Executors.newFixedThreadPool(threadPool);
+        this.poolSize = 128;
+        this.timeoutInMillis = 10_000;
+    }
+
+    public void setPoolSize(int poolSize) {
+        this.poolSize = poolSize;
+    }
+
+    public void setTimeout(int timeoutInMillis) {
+        this.timeoutInMillis = timeoutInMillis;
     }
 
     private void preSets(String startUrl) {
+        this.executor = Executors.newFixedThreadPool(this.poolSize);
         normalizer = new URLNormalizer(startUrl);
         queue.offer(normalizer.normalize(startUrl));
     }
 
     public void startCrawling(String startUrl) {
-        if (!startUrl.startsWith("http")) {
-            throw new IllegalArgumentException("invalid url format, correct example: https://monzo.com");
-        }
         preSets(startUrl);
-        System.out.printf("Initiating web crawling, startUrl=%s, poolSize=%d%n", startUrl, poolSize);
+        logger.info(String.format("Initiating web crawling, startUrl=%s, poolSize=%d%n", startUrl, poolSize));
         // start crawling
         startCrawling();
     }
@@ -72,9 +60,9 @@ public class WebCrawler {
     private void startCrawling() {
         long start = System.currentTimeMillis();
         start();
-        System.out.printf("WebCrawler -- main thread exit, process completed in [%d] sec, but was waiting for additional [%d] sec to see if new URL appears %n",
-                (System.currentTimeMillis() - timeoutInMills - start) / 1000,
-                timeoutInMills / 1000);
+        logger.info(String.format("WebCrawler -- main thread exit, process completed in [%d] sec, but was waiting for additional [%d] sec to see if new URL appears %n",
+                (System.currentTimeMillis() - timeoutInMillis - start) / 1000,
+                timeoutInMillis / 1000));
         executor.shutdown();
     }
 
@@ -94,14 +82,14 @@ public class WebCrawler {
     }
 
     private Set<String> fetchAndFilter(String url, Predicate<String> urlFilter) {
-        return WebPageHandler.fetch.apply(url, timeoutInMills)
-                .flatMap(page -> WebPageHandler.filter.apply(page, urlFilter))
+        return WebPageHandler.FETCHER.apply(url, timeoutInMillis)
+                .flatMap(page -> WebPageHandler.LINK_EXTRACTOR.apply(page, urlFilter))
                 .map(urlStream -> urlStream.map(normalizer::normalize).collect(Collectors.toSet()))
                 .orElse(new HashSet<>());
     }
 
     private void output(String currUrl, Set<String> links) {
-        outputStrategy.output(currUrl + " -> " + links.toString());
+        writer.write(currUrl + " -> " + links.toString());
     }
 
 
@@ -118,5 +106,4 @@ public class WebCrawler {
         });
         lock.unlock();
     }
-
 }
