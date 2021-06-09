@@ -44,17 +44,17 @@ public class WebCrawler {
         this.timeoutInMillis = timeoutInMillis;
     }
 
-    private void preSets(String startUrl) {
-        this.executor = Executors.newFixedThreadPool(this.poolSize);
-        normalizer = new URLNormalizer(startUrl);
-        queue.offer(normalizer.normalize(startUrl));
-    }
-
     public void startCrawling(String startUrl) {
         preSets(startUrl);
         logger.info(String.format("Initiating web crawling, startUrl=%s, poolSize=%d%n", startUrl, poolSize));
         // start crawling
         startCrawling();
+    }
+
+    private void preSets(String startUrl) {
+        this.executor = Executors.newFixedThreadPool(this.poolSize);
+        normalizer = new URLNormalizer(startUrl);
+        queue.offer(normalizer.normalize(startUrl));
     }
 
     private void startCrawling() {
