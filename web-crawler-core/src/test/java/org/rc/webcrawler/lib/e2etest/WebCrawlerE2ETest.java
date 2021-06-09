@@ -7,9 +7,9 @@ import org.rc.webcrawler.lib.helpers.TestInMemoryCache;
 
 import java.util.concurrent.LinkedBlockingQueue;
 
-// profiles will be set here for specific configuration
-// in different environments
-public class WebCrawlerE2ETest {
+// Profiles will be set here for specific configuration
+// in specific environments
+class WebCrawlerE2ETest {
 
     protected static final String START_URL = "https://monzo.com";
 
