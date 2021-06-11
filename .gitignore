@@ -1,3 +1,5 @@
-target
-.idea
 *.iml
+.idea/
+web-crawler-app/target/
+web-crawler-core/target/
+

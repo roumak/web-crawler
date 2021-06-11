@@ -1,13 +1,21 @@
 package org.rc.webcrawler.lib;
 
+import org.jsoup.Connection;
+
+import javax.swing.text.html.Option;
+import java.time.Duration;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -17,10 +25,8 @@ public class WebCrawler {
     private final BlockingQueue<String> queue;
     private final Cache cache;
     private final Writer writer;
+    private final ExecutorService executor;
 
-    private ExecutorService executor;
-    private long timeoutInMillis;
-    private int poolSize;
     private URLNormalizer normalizer;
 
     private final ReentrantLock lock = new ReentrantLock();
@@ -28,63 +34,60 @@ public class WebCrawler {
 
     public WebCrawler(BlockingQueue<String> queue,
                       Cache cache,
-                      Writer writer) {
+                      Writer writer,
+                      ExecutorService executorService) {
         this.queue = queue;
         this.writer = writer;
         this.cache = cache;
-        this.poolSize = 128;
-        this.timeoutInMillis = 10_000;
+        this.executor = executorService;
     }
 
-    public void setPoolSize(int poolSize) {
-        this.poolSize = poolSize;
+    public void startCrawling(String startUrl, int timeoutInMillis, Predicate<String> pageUrlFilter) {
+        startCrawling(startUrl, timeoutInMillis, page -> { /* do nothing */ }, pageUrlFilter);
     }
 
-    public void setTimeout(int timeoutInMillis) {
-        this.timeoutInMillis = timeoutInMillis;
-    }
-
-    public void startCrawling(String startUrl) {
+    public void startCrawling(String startUrl, int timeoutInMillis, Consumer<Optional<Connection.Response>> pageAction, Predicate<String> pageUrlFilter) {
         preSets(startUrl);
-        logger.info(String.format("Initiating web crawling, startUrl=%s, poolSize=%d%n", startUrl, poolSize));
+        logger.info(String.format("Initiating web crawling, startUrl=%s", startUrl));
         // start crawling
-        startCrawling();
+        begin(pageUrlFilter, pageAction, timeoutInMillis);
     }
 
     private void preSets(String startUrl) {
-        this.executor = Executors.newFixedThreadPool(this.poolSize);
         normalizer = new URLNormalizer(startUrl);
         queue.offer(normalizer.normalize(startUrl));
     }
 
-    private void startCrawling() {
+    private void begin(Predicate<String> pageUrlFilter, Consumer<Optional<Connection.Response>> responseAction, int timeoutInMillis) {
         long start = System.currentTimeMillis();
-        start();
-        logger.info(String.format("WebCrawler -- main thread exit, process completed in [%d] sec, but was waiting for additional [%d] sec to see if new URL appears %n",
-                (System.currentTimeMillis() - timeoutInMillis - start) / 1000,
-                timeoutInMillis / 1000));
-        executor.shutdown();
-    }
-
-    private void start() {
         try {
             String url;
-            while ((url = queue.poll(10, TimeUnit.SECONDS)) != null) {
+            while ((url = queue.poll(timeoutInMillis, TimeUnit.MILLISECONDS)) != null) {
                 final String currentPageUrl = url;
-                var normalizedUrlCF =
-                        CompletableFuture.supplyAsync(() ->
-                                fetchExtractAndNormalize(currentPageUrl, subUrl -> subUrl.startsWith("/")), executor);
+                var pageCf =
+                        CompletableFuture.supplyAsync(() -> fetch(currentPageUrl, timeoutInMillis), executor);
+                pageCf.thenAcceptAsync(responseAction, executor);
 
-                normalizedUrlCF.thenAcceptAsync(subUrl -> writer.write(currentPageUrl + " -> " + subUrl.toString()));
-                normalizedUrlCF.thenAccept(this::saveToTempQueue);
+               var subUrlCf =  pageCf.thenApply(page -> extractUrls(page, pageUrlFilter));
+                subUrlCf.thenAcceptAsync(this::saveToTempQueue);
+                subUrlCf.thenAcceptAsync(subUrl -> writer.write(currentPageUrl , subUrl));
             }
         } catch (InterruptedException e) {
             e.printStackTrace();
+        } finally {
+            executor.shutdown();
+            logger.info(String.format("WebCrawler -- main thread exit, process completed in [%d] sec, but was waiting for additional [%d] sec to see if new URL appears %n",
+                    (System.currentTimeMillis() - timeoutInMillis - start) / 1000,
+                    timeoutInMillis / 1000));
         }
     }
 
-    private Set<String> fetchExtractAndNormalize(String url, Predicate<String> urlFilter) {
-        return WebPageHandler.PAGE_FETCHER.apply(url, timeoutInMillis)
+    private Optional<Connection.Response> fetch(String url, int timeoutInMillis) {
+        return WebPageHandler.PAGE_FETCHER.apply(url, timeoutInMillis);
+    }
+
+    private Set<String> extractUrls(Optional<Connection.Response> response, Predicate<String> urlFilter) {
+        return response
                 .flatMap(page -> WebPageHandler.URL_EXTRACTOR.apply(page, urlFilter))
                 .map(urlStream -> urlStream.map(normalizer::normalize).collect(Collectors.toSet()))
                 .orElse(new HashSet<>());

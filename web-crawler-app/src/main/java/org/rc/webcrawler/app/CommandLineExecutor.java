@@ -1,39 +1,35 @@
 package org.rc.webcrawler.app;
 
+import org.jsoup.Connection;
 import org.rc.webcrawler.lib.WebCrawler;
 
+import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Simple command line app that uses {@link WebCrawler}
  */
 public class CommandLineExecutor {
+    static final ExecutorService executorService = Executors.newFixedThreadPool(128);
 
-    private static final WebCrawler webCrawler =
-            new WebCrawler(new LinkedBlockingQueue<>(),
-                    new InMemoryConcurrentCache(),
-                    new ConsoleWriter());
+    private static final WebCrawler webCrawler = new WebCrawler(new LinkedBlockingQueue<>(),
+            new InMemoryConcurrentCache(),
+            new ConsoleWriter(),
+            executorService);
 
     public static void main(String[] args) {
-        switch (args.length) {
-            case 1:
-                break;
-            case 2:
-                webCrawler.setPoolSize(Integer.parseInt(args[1]));
-                break;
-            case 3:
-                webCrawler.setPoolSize(Integer.parseInt(args[1]));
-                webCrawler.setTimeout(Integer.parseInt(args[1]));
-                break;
-            default:
-                throw new IllegalArgumentException("" +
-                        "\nrequired command line arguments:" +
-                        "\n arg[0] - startUrl (mandatory) example: https://monzo.com" +
-                        "\n arg[1] - poolSize (optional) defaults to 128" +
-                        "\n arg[2] - timeout in millis (optional) defaults to 10_000"
-                );
+        if (args.length != 2) {
+            throw new IllegalArgumentException("need two fields\n" +
+                    "args[0] - start url, ex-https://monzo.com,\n" +
+                    "args[1] - timeout in mills\n");
         }
-        webCrawler.startCrawling(args[0]);
+        webCrawler.startCrawling(args[0],
+                Integer.parseInt(args[1]),
+                subUrls -> subUrls.startsWith("/")
+        );
     }
-
 }
