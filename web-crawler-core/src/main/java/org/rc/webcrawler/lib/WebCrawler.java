@@ -2,17 +2,12 @@ package org.rc.webcrawler.lib;
 
 import org.jsoup.Connection;
 
-import javax.swing.text.html.Option;
-import java.time.Duration;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -69,7 +64,7 @@ public class WebCrawler {
                 pageCf.thenAcceptAsync(responseAction, executor);
 
                var subUrlCf =  pageCf.thenApply(page -> extractUrls(page, pageUrlFilter));
-                subUrlCf.thenAcceptAsync(this::saveToTempQueue);
+                subUrlCf.thenAcceptAsync(this::saveToQueue);
                 subUrlCf.thenAcceptAsync(subUrl -> writer.write(currentPageUrl , subUrl));
             }
         } catch (InterruptedException e) {
@@ -94,7 +89,7 @@ public class WebCrawler {
     }
 
 
-    private void saveToTempQueue(Set<String> normalizedUrls) {
+    private void saveToQueue(Set<String> normalizedUrls) {
         // possible multiple batch of urls may overlap each other here
         // that's why a lock is introduced
         lock.lock();
