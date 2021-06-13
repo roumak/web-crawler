@@ -1,14 +1,10 @@
 package org.rc.webcrawler.app;
 
-import org.jsoup.Connection;
-import org.rc.webcrawler.lib.WebCrawler;
+import org.rc.webcrawler.core.WebCrawler;
 
-import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Simple command line app that uses {@link WebCrawler}

@@ -1,6 +1,6 @@
-package org.rc.webcrawler.lib.helpers;
+package org.rc.webcrawler.core.helpers;
 
-import org.rc.webcrawler.lib.Cache;
+import org.rc.webcrawler.core.Cache;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;

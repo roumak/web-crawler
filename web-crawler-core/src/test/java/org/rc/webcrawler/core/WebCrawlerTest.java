@@ -1,4 +1,4 @@
-package org.rc.webcrawler.lib;
+package org.rc.webcrawler.core;
 
 import org.jsoup.Connection;
 import org.jsoup.helper.HttpConnection;
@@ -6,10 +6,9 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
-import org.rc.webcrawler.lib.helpers.TestConsoleWriter;
+import org.rc.webcrawler.core.helpers.TestConsoleWriter;
 
 import java.util.Optional;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;

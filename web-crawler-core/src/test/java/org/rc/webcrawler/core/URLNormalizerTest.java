@@ -1,4 +1,4 @@
-package org.rc.webcrawler.lib;
+package org.rc.webcrawler.core;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

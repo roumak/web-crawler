@@ -1,11 +1,10 @@
-package org.rc.webcrawler.lib.e2etest;
+package org.rc.webcrawler.core.e2etest;
 
 import org.junit.jupiter.api.Test;
-import org.rc.webcrawler.lib.WebCrawler;
-import org.rc.webcrawler.lib.helpers.TestConsoleWriter;
-import org.rc.webcrawler.lib.helpers.TestInMemoryCache;
+import org.rc.webcrawler.core.WebCrawler;
+import org.rc.webcrawler.core.helpers.TestConsoleWriter;
+import org.rc.webcrawler.core.helpers.TestInMemoryCache;
 
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;

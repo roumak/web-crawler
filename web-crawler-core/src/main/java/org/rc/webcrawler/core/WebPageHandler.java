@@ -1,4 +1,4 @@
-package org.rc.webcrawler.lib;
+package org.rc.webcrawler.core;
 
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;

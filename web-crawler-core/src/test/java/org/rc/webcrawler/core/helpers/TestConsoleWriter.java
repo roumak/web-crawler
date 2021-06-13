@@ -1,6 +1,6 @@
-package org.rc.webcrawler.lib.helpers;
+package org.rc.webcrawler.core.helpers;
 
-import org.rc.webcrawler.lib.Writer;
+import org.rc.webcrawler.core.Writer;
 
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;

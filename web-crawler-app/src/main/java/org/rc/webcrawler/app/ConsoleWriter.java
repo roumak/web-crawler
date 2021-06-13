@@ -1,6 +1,6 @@
 package org.rc.webcrawler.app;
 
-import org.rc.webcrawler.lib.Writer;
+import org.rc.webcrawler.core.Writer;
 
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
