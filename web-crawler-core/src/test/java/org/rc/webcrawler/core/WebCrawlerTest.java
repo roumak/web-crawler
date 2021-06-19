@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import org.rc.webcrawler.core.Cache;
+import org.rc.webcrawler.core.WebCrawler;
+import org.rc.webcrawler.core.Writer;
 import org.rc.webcrawler.core.helpers.TestConsoleWriter;
 
 import java.util.Optional;
@@ -28,24 +31,6 @@ class WebCrawlerTest {
     @Test
     public void startUrlValidation() {
         Assertions.assertThrows(IllegalArgumentException.class, () -> webCrawler.startCrawling("google.com", 10_000,url -> url.startsWith("/")));
-    }
-
-    @Test
-    public void WebPageHandlerTest() {
-        Stream<String> urlStream = IntStream.rangeClosed(1, 100).boxed().map(i -> "/url" + i);
-        try (MockedStatic<WebPageHandler> mockedStatic = Mockito.mockStatic(WebPageHandler.class)) {
-            mockedStatic.when(() -> WebPageHandler.URL_EXTRACTOR.apply(any(Connection.Response.class), any(Predicate.class)))
-                    .thenReturn(Optional.of(urlStream))
-                    .thenReturn(Optional.empty());
-
-            Connection.Response mockResponse = Mockito.mock(Connection.Response.class);
-            mockedStatic.when(() -> WebPageHandler.PAGE_FETCHER.apply(anyString(), any(Integer.class)))
-                    .thenReturn(Optional.ofNullable(mockResponse));
-
-            Assertions.assertEquals(mockResponse, WebPageHandler.PAGE_FETCHER.apply("/", 100).get());
-            Stream<String> actualUrlSet = WebPageHandler.URL_EXTRACTOR.apply(Mockito.mock(HttpConnection.Response.class), s -> s.startsWith("/")).get();
-            Assertions.assertEquals(urlStream, actualUrlSet);
-        }
     }
 
 }

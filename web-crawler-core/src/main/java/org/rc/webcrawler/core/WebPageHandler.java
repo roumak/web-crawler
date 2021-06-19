@@ -12,13 +12,22 @@ import java.util.stream.Stream;
 
 class WebPageHandler {
 
-    private static final Logger logger = Logger.getLogger(WebPageHandler.class.getName());
+    private final Logger logger = Logger.getLogger(WebPageHandler.class.getName());
 
-    public static final BiFunction<String, Integer, Optional<Connection.Response>> PAGE_FETCHER = WebPageHandler::fetch;
-    public static final BiFunction<Connection.Response, Predicate<String>, Optional<Stream<String>>> URL_EXTRACTOR = WebPageHandler::extract;
+    public final BiFunction<String, Integer, Optional<Connection.Response>> PAGE_FETCHER;
+    public final BiFunction<Connection.Response, Predicate<String>, Optional<Stream<String>>> URL_EXTRACTOR;
 
+    WebPageHandler(){
+        PAGE_FETCHER = this::fetch;
+        URL_EXTRACTOR = this::extract;
+    }
 
-    private static Optional<Connection.Response> fetch(String url, int timeoutInMills) {
+    WebPageHandler(BiFunction<String, Integer,Optional<Connection.Response>> fetcher,BiFunction<Connection.Response, Predicate<String>, Optional<Stream<String>>> extractor){
+        PAGE_FETCHER = fetcher;
+        URL_EXTRACTOR = extractor;
+    }
+
+    private Optional<Connection.Response> fetch(String url, int timeoutInMills) {
         try {
             return Optional.of(
                     Jsoup.connect(url)
@@ -35,7 +44,7 @@ class WebPageHandler {
 
     }
 
-    private static Optional<Stream<String>> extract(Connection.Response response, Predicate<String> subUrlFilter) {
+    private Optional<Stream<String>> extract(Connection.Response response, Predicate<String> subUrlFilter) {
         try {
             return Optional.of(
                     response.parse().select("a[href]")

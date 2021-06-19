@@ -2,6 +2,7 @@ package org.rc.webcrawler.core;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.rc.webcrawler.core.URLNormalizer;
 
 class URLNormalizerTest {
 

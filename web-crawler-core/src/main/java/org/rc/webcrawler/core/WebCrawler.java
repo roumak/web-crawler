@@ -21,6 +21,7 @@ public class WebCrawler {
     private final Cache cache;
     private final Writer writer;
     private final ExecutorService executor;
+    private final WebPageHandler webPageHandler = new WebPageHandler();
 
     private URLNormalizer normalizer;
 
@@ -78,12 +79,12 @@ public class WebCrawler {
     }
 
     private Optional<Connection.Response> fetch(String url, int timeoutInMillis) {
-        return WebPageHandler.PAGE_FETCHER.apply(url, timeoutInMillis);
+        return webPageHandler.PAGE_FETCHER.apply(url, timeoutInMillis);
     }
 
     private Set<String> extractUrls(Optional<Connection.Response> response, Predicate<String> urlFilter) {
         return response
-                .flatMap(page -> WebPageHandler.URL_EXTRACTOR.apply(page, urlFilter))
+                .flatMap(page -> webPageHandler.URL_EXTRACTOR.apply(page, urlFilter))
                 .map(urlStream -> urlStream.map(normalizer::normalize).collect(Collectors.toSet()))
                 .orElse(new HashSet<>());
     }
@@ -93,12 +94,16 @@ public class WebCrawler {
         // possible multiple batch of urls may overlap each other here
         // that's why a lock is introduced
         lock.lock();
-        normalizedUrls.parallelStream().forEach(each -> {
-            if (!cache.contain(each)) {
-                cache.put(each);
-                queue.offer(each);
-            }
-        });
-        lock.unlock();
+        try {
+            normalizedUrls.parallelStream().forEach(each -> {
+                if (!cache.contain(each)) {
+                    cache.put(each);
+                    queue.offer(each);
+                }
+            });
+        }
+        finally{
+            lock.unlock();
+        }
     }
 }
