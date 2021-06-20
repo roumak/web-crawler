@@ -10,6 +10,7 @@
     <packaging>pom</packaging>
     <modules>
         <module>web-crawler-app</module>
+        <module>web-crawler-app-distributed</module>
         <module>web-crawler-core</module>
     </modules>
 
