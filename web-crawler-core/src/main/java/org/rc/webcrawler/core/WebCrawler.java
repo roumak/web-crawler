@@ -21,7 +21,7 @@ public class WebCrawler {
     private final Cache cache;
     private final Writer writer;
     private final ExecutorService executor;
-    private final WebPageHandler webPageHandler = new WebPageHandler();
+    private final WebPageHandler webPageHandler;
 
     private URLNormalizer normalizer;
 
@@ -36,6 +36,8 @@ public class WebCrawler {
         this.writer = writer;
         this.cache = cache;
         this.executor = executorService;
+
+        this.webPageHandler = new WebPageHandler();
     }
 
     public void startCrawling(String startUrl, int timeoutInMillis, Predicate<String> pageUrlFilter) {
